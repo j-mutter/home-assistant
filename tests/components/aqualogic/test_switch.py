@@ -6,40 +6,38 @@ from aqualogic.core import States
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from homeassistant.components.aqualogic import DOMAIN, AquaLogicProcessor
+from homeassistant.components.aqualogic.const import UPDATE_TOPIC
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
-from homeassistant.const import ATTR_ENTITY_ID, SERVICE_TURN_OFF, SERVICE_TURN_ON
+from homeassistant.const import ATTR_ENTITY_ID, Platform, SERVICE_TURN_OFF, SERVICE_TURN_ON
 from homeassistant.core import HomeAssistant
-from homeassistant.setup import async_setup_component
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+from tests.common import MockConfigEntry, snapshot_platform
 
 
 @pytest.fixture
-async def init_switches(
-    hass: HomeAssistant, init_integration: AquaLogicProcessor
-) -> None:
-    """Set up the AquaLogic switch platform."""
-    assert await async_setup_component(
-        hass,
-        "switch",
-        {"switch": {"platform": DOMAIN}},
-    )
-    await hass.async_block_till_done()
+def platforms() -> list[Platform]:
+    """Fixture to specify platforms to test."""
+    return [Platform.SWITCH]
 
 
-@pytest.mark.usefixtures("init_switches")
+@pytest.mark.usefixtures("entity_registry_enabled_by_default")
 async def test_switches(
     hass: HomeAssistant,
     snapshot: SnapshotAssertion,
+    entity_registry: er.EntityRegistry,
+    init_integration: MockConfigEntry,
+    mock_processor: MagicMock,
 ) -> None:
-    """Test all switch entities are created and report correct state."""
-    states = {
-        state.entity_id: state
-        for state in sorted(hass.states.async_all("switch"), key=lambda s: s.entity_id)
-    }
-    assert states == snapshot
+    """Test switch entities are created and report correct state."""
+    async_dispatcher_send(hass, UPDATE_TOPIC)
+    await hass.async_block_till_done()
+
+    await snapshot_platform(hass, entity_registry, snapshot, init_integration.entry_id)
 
 
-@pytest.mark.usefixtures("init_switches")
+@pytest.mark.usefixtures("init_integration")
 @pytest.mark.parametrize(
     ("service", "expected_state"),
     [
